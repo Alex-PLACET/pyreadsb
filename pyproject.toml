@@ -1,6 +1,6 @@
 [project]
 name = "pyreadsb"
-version = "0.1.0"
+version = "1.0.0"
 description = "Python library to read and parse data from a readsb files."
 readme = "README.md"
 authors = [
@@ -30,7 +30,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.ruff]
-target-version = "py312"
+target-version = "1.0.0"
 line-length = 88
 
 [tool.ruff.lint]
@@ -61,7 +61,7 @@ profile = "black"
 line_length = 88
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "1.0.0"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -74,3 +74,8 @@ warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
 strict_equality = true
+
+[dependency-groups]
+dev = [
+    "toml>=0.10.2",
+]
