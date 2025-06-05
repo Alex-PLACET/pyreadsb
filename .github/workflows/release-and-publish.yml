@@ -1,4 +1,4 @@
-name: Release
+name: Release and Publish
 
 on:
   workflow_dispatch:
@@ -18,10 +18,12 @@ on:
         type: string
 
 jobs:
-  release:
+  release-and-publish:
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
+      id-token: write  # For PyPI trusted publishing
     
     steps:
     - uses: actions/checkout@v4
@@ -42,7 +44,6 @@ jobs:
     - name: Install dependencies
       run: |
         uv sync --all-extras
-        uv add --dev toml
     
     - name: Get current version
       id: current_version
@@ -92,6 +93,10 @@ jobs:
       run: |
         uv run pytest tests/ -v
     
+    - name: Build package
+      run: |
+        uv build
+    
     - name: Commit version bump
       run: |
         git config --local user.email "action@github.com"
@@ -109,16 +114,19 @@ jobs:
       shell: pwsh
     
     - name: Create GitHub Release
-      uses: actions/create-release@v1
+      uses: elgohr/Github-Release-Action@v5
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: v${{ steps.new_version.outputs.version }}
-        release_name: Release v${{ steps.new_version.outputs.version }}
+        title: Release v${{ steps.new_version.outputs.version }}
+        tag: v${{ steps.new_version.outputs.version }}
         body: |
           Release version ${{ steps.new_version.outputs.version }}
           
           Changes in this release:
           - Automated release created from commit ${{ github.sha }}
-        draft: false
-        prerelease: false
+    
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        verbose: true
