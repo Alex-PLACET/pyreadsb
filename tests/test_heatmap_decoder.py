@@ -225,7 +225,7 @@ class TestHeatmapDecoderWithRealFile:
         #         print(f"Timestamp: {entry.timestamp}")
         #     # Check that each entry is an instance of expected types
         #     print(f"Entry: {entry}")
-        entries = list(self.decoder.decode(self.test_file_path))
+        entries = list(self.decoder.decode_from_file(self.test_file_path))
 
         # Basic assertions
         assert len(entries) > 0
@@ -240,7 +240,7 @@ class TestHeatmapDecoderWithRealFile:
         entries = []
         count = 0
 
-        for entry in self.decoder.decode(self.test_file_path):
+        for entry in self.decoder.decode_from_file(self.test_file_path):
             entries.append(entry)
             count += 1
             if count >= 10:  # Only process first 10 entries
@@ -265,7 +265,7 @@ class TestHeatmapDecoderWithRealFile:
         heat_count = 0
         callsign_count = 0
 
-        for entry in self.decoder.decode(self.test_file_path):
+        for entry in self.decoder.decode_from_file(self.test_file_path):
             entry_count += 1
 
             if isinstance(entry, HeatmapDecoder.TimestampSeparator):
@@ -312,7 +312,7 @@ class TestHeatmapDecoderWithRealFile:
     def test_decode_real_file_memory_efficiency(self):
         """Test that decoder processes file efficiently without loading everything into memory."""
         # This test verifies the generator works correctly
-        decoder_gen = self.decoder.decode(self.test_file_path)
+        decoder_gen = self.decoder.decode_from_file(self.test_file_path)
 
         # Get first entry
         first_entry = next(decoder_gen)

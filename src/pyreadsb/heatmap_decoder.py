@@ -1,15 +1,24 @@
-import gzip
 import logging
 import struct
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import (
-    BinaryIO,
+    Protocol,
     Final,
+    Union,
+    runtime_checkable,
 )
-
 from .compression_utils import open_file
+
+
+@runtime_checkable
+class FileProtocol(Protocol):
+    """Protocol for file-like objects with read, tell, and seek methods."""
+
+    def read(self, size: int = -1, /) -> bytes: ...
+    def tell(self) -> int: ...
+    def seek(self, offset: int, whence: int = 0, /) -> int: ...
 
 
 class HeatmapDecoder:
@@ -61,10 +70,45 @@ class HeatmapDecoder:
         if self.debug:
             self.logger.debug(message)
 
-    def _detect_endianness(
-        self, file_handle: BinaryIO | gzip.GzipFile
-    ) -> struct.Struct:
-        """Detect endianness by reading first few entries."""
+    def _check_entry_endianness(self, entry_data: bytes) -> struct.Struct | None:
+        """Check a single entry for endianness markers. Returns struct format if found, None otherwise."""
+        if len(entry_data) < 4:
+            return None
+
+        try:
+            # Try little-endian first (more common)
+            hex_val_le = struct.unpack("<I", entry_data[:4])[0]
+            if hex_val_le == self.MAGIC_NUMBER:
+                self.logger.debug("Detected little-endian format")
+                return self.HEAT_ENTRY_LE
+
+            # Try big-endian
+            hex_val_be = struct.unpack(">I", entry_data[:4])[0]
+            if hex_val_be == self.MAGIC_NUMBER:
+                self.logger.debug("Detected big-endian format")
+                return self.HEAT_ENTRY_BE
+
+            return None
+        except struct.error:
+            return None
+
+    def _detect_endianess_from_bytes(self, bytes: bytes) -> struct.Struct:
+        """Detect endianness from a bytes object."""
+        pos = 0
+        while pos + self.HEAT_ENTRY_SIZE <= len(bytes):
+            entry_data = bytes[pos : pos + self.HEAT_ENTRY_SIZE]
+            detected_struct = self._check_entry_endianness(entry_data)
+
+            if detected_struct:
+                return detected_struct
+            pos += self.HEAT_ENTRY_SIZE
+
+        # Default to little-endian if no magic found
+        self.logger.debug("No magic number found, defaulting to little-endian")
+        return self.HEAT_ENTRY_LE
+
+    def _detect_endianness_from_file(self, file_handle: FileProtocol) -> struct.Struct:
+        """Detect endianness from a file-like object."""
         original_pos: int = file_handle.tell()
 
         try:
@@ -77,17 +121,9 @@ class HeatmapDecoder:
                     )
                     break
 
-                # Try little-endian first (more common)
-                hex_val_le = struct.unpack("<I", entry_data[:4])[0]
-                if hex_val_le == self.MAGIC_NUMBER:
-                    self.logger.debug("Detected little-endian format")
-                    return self.HEAT_ENTRY_LE
-
-                # Try big-endian
-                hex_val_be = struct.unpack(">I", entry_data[:4])[0]
-                if hex_val_be == self.MAGIC_NUMBER:
-                    self.logger.debug("Detected big-endian format")
-                    return self.HEAT_ENTRY_BE
+                detected_struct = self._check_entry_endianness(entry_data)
+                if detected_struct:
+                    return detected_struct
 
             # Default to little-endian if no magic found
             self.logger.debug("No magic number found, defaulting to little-endian")
@@ -99,6 +135,18 @@ class HeatmapDecoder:
         finally:
             # Restore file position
             file_handle.seek(original_pos)
+
+    def _detect_endianness(
+        self, data_source: Union[FileProtocol, bytes]
+    ) -> struct.Struct:
+        """Detect endianness by reading first few entries."""
+        if isinstance(data_source, bytes):
+            return self._detect_endianess_from_bytes(data_source)
+        elif isinstance(data_source, FileProtocol):
+            return self._detect_endianness_from_file(data_source)
+        else:
+            self.logger.error("Unsupported data source type for endianness detection.")
+            raise TypeError("Unsupported data source type. Must be bytes or file-like.")
 
     def _decode_timestamp(self, hex_val: int, lat: int, lon: int) -> float:
         """Decode timestamp from separator entry."""
@@ -164,7 +212,69 @@ class HeatmapDecoder:
                 ground_speed=ground_speed,
             )
 
-    def decode(
+    def _decode_entry(
+        self, entry_struct: struct.Struct, data: bytes
+    ) -> HeatEntry | CallsignEntry | TimestampSeparator:
+        """
+        Decode a single entry from binary data into the appropriate entry type.
+        This method unpacks binary data using the provided struct and determines whether
+        the entry represents a heat map entry, callsign entry, or timestamp separator
+        based on the magic number detection.
+        Args:
+            entry_struct (struct.Struct): The struct object used for unpacking binary data
+            data (bytes): Raw binary data to decode, must be at least HEAT_ENTRY_SIZE bytes. Only the first HEAT_ENTRY_SIZE bytes will be processed.
+        Returns:
+            HeatEntry | CallsignEntry | TimestampSeparator | None:
+                - HeatEntry or CallsignEntry for regular aircraft data
+                - TimestampSeparator when magic number is detected
+                - None if data is insufficient or parsing fails
+        Note:
+            Updates self.current_timestamp when a timestamp separator is encountered.
+            Logs warnings for insufficient data or struct parsing errors.
+        """
+        if not data or len(data) < self.HEAT_ENTRY_SIZE:
+            raise ValueError("Insufficient data for decoding.")
+
+        hex_val, lat, lon, alt, gs = entry_struct.unpack(data[: self.HEAT_ENTRY_SIZE])
+        if hex_val == self.MAGIC_NUMBER:
+            # Timestamp separator
+            timestamp: float = self._decode_timestamp(hex_val, lat, lon)
+            self.current_timestamp = timestamp
+
+            separator = self.TimestampSeparator(
+                timestamp=timestamp,
+                raw_data=data,
+            )
+            return separator
+        else:
+            # Heat entry or callsign entry
+            entry: HeatmapDecoder.HeatEntry | HeatmapDecoder.CallsignEntry = (
+                self._decode_heat_entry(hex_val, lat, lon, alt, gs)
+            )
+            return entry
+
+    def decode_from_bytes(
+        self, data: bytes
+    ) -> Generator[HeatEntry | CallsignEntry | TimestampSeparator, None, None]:
+        """Decode entries from a bytes object."""
+        if not data or len(data) < self.HEAT_ENTRY_SIZE:
+            self.logger.warning("Insufficient data for decoding.")
+
+        entry_struct: Final[struct.Struct] = self._detect_endianness(data)
+
+        for pos in range(0, len(data), self.HEAT_ENTRY_SIZE):
+            entry_data: bytes = data[pos : pos + self.HEAT_ENTRY_SIZE]
+            if len(entry_data) != self.HEAT_ENTRY_SIZE:
+                self.logger.warning(
+                    f"Incomplete entry read at position {pos}: {len(entry_data)} bytes"
+                )
+                break
+
+            entry = self._decode_entry(entry_struct, entry_data)
+            if entry:
+                yield entry
+
+    def decode_from_file(
         self, file_path: Path
     ) -> Generator[HeatEntry | CallsignEntry | TimestampSeparator, None, None]:
         """Memory-efficient decoder that yields entries one by one."""
@@ -172,7 +282,7 @@ class HeatmapDecoder:
 
         with open_file(file_path) as f:
             # Detect endianness from file
-            entry_struct = self._detect_endianness(f)
+            entry_struct: Final[struct.Struct] = self._detect_endianness(f)
 
             while True:
                 # Read one entry at a time
@@ -186,26 +296,6 @@ class HeatmapDecoder:
                         )
                     break
 
-                try:
-                    hex_val, lat, lon, alt, gs = entry_struct.unpack(entry_data)
-
-                    if hex_val == self.MAGIC_NUMBER:
-                        # Timestamp separator
-                        timestamp: float = self._decode_timestamp(hex_val, lat, lon)
-                        self.current_timestamp = timestamp
-
-                        separator = self.TimestampSeparator(
-                            timestamp=timestamp,
-                            raw_data=entry_data,
-                        )
-                        yield separator
-                    else:
-                        # Heat entry or callsign entry
-                        entry: (
-                            HeatmapDecoder.HeatEntry | HeatmapDecoder.CallsignEntry
-                        ) = self._decode_heat_entry(hex_val, lat, lon, alt, gs)
-                        yield entry
-
-                except struct.error as e:
-                    self.logger.warning(f"Error parsing entry: {e}")
-                    continue
+                entry = self._decode_entry(entry_struct, entry_data)
+                if entry:
+                    yield entry

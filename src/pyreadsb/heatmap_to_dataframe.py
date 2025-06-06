@@ -2,6 +2,7 @@ import logging
 from collections.abc import Generator
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Sequence
 
 import polars as pl
 
@@ -94,32 +95,14 @@ def convert_to_dataframes(
 
 
 def export_to_parquet(
-    entries: list[
+    entries: Sequence[
         HeatmapDecoder.HeatEntry
         | HeatmapDecoder.CallsignEntry
         | HeatmapDecoder.TimestampSeparator
-    ]
-    | tuple[pl.DataFrame, pl.DataFrame],
+    ],
     output_path: Path,
 ) -> None:
     """Export decoded entries to separate Parquet files."""
-    if isinstance(entries, tuple) and len(entries) == 2:
-        # Already Polars DataFrames
-        heat_df, callsign_df = entries
-
-        heat_output = output_path.with_stem(f"{output_path.stem}_positions")
-        callsign_output = output_path.with_stem(f"{output_path.stem}_callsigns")
-
-        heat_df.write_parquet(heat_output, compression="brotli", use_pyarrow=True)
-        callsign_df.write_parquet(
-            callsign_output, compression="brotli", use_pyarrow=True
-        )
-
-        logger.info(f"Exported {len(heat_df)} position entries to {heat_output}")
-        logger.info(
-            f"Exported {len(callsign_df)} callsign entries to {callsign_output}"
-        )
-        return
 
     # Convert list to DataFrames (backward compatibility)
     heat_data = []
