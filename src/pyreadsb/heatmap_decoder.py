@@ -4,11 +4,11 @@ from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import (
-    Protocol,
     Final,
-    Union,
+    Protocol,
     runtime_checkable,
 )
+
 from .compression_utils import open_file
 
 
@@ -137,7 +137,7 @@ class HeatmapDecoder:
             file_handle.seek(original_pos)
 
     def _detect_endianness(
-        self, data_source: Union[FileProtocol, bytes]
+        self, data_source: FileProtocol | bytes
     ) -> struct.Struct:
         """Detect endianness by reading first few entries."""
         if isinstance(data_source, bytes):

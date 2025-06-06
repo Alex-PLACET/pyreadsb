@@ -1,8 +1,7 @@
 import logging
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Sequence
 
 import polars as pl
 

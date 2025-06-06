@@ -1,0 +1,204 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Tests",
+			"type": "shell",
+			"command": "pytest",
+			"args": [
+				"tests/",
+				"-v",
+				"--cov=src/pyreadsb",
+				"--cov-report=html",
+				"--cov-report=term"
+			],
+			"group": "test",
+			"problemMatcher": [
+				"$python"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Run Tests (Quick)",
+			"type": "shell",
+			"command": "pytest",
+			"args": [
+				"tests/",
+				"-v"
+			],
+			"group": "test",
+			"problemMatcher": [
+				"$python"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Ruff Check",
+			"type": "shell",
+			"command": "ruff",
+			"args": [
+				"check",
+				"src/",
+				"tests/"
+			],
+			"group": "build",
+			"problemMatcher": [],
+			"isBackground": false
+		},
+		{
+			"label": "Ruff Format Check",
+			"type": "shell",
+			"command": "ruff",
+			"args": [
+				"format",
+				"--check",
+				"src/",
+				"tests/"
+			],
+			"group": "build",
+			"problemMatcher": [],
+			"isBackground": false
+		},
+		{
+			"label": "Ruff Fix",
+			"type": "shell",
+			"command": "ruff",
+			"args": [
+				"check",
+				"--fix",
+				"src/",
+				"tests/"
+			],
+			"group": "build",
+			"problemMatcher": [],
+			"isBackground": false
+		},
+		{
+			"label": "Ruff Format",
+			"type": "shell",
+			"command": "ruff",
+			"args": [
+				"format",
+				"src/",
+				"tests/"
+			],
+			"group": "build",
+			"problemMatcher": [],
+			"isBackground": false
+		},
+		{
+			"label": "MyPy Type Check",
+			"type": "shell",
+			"command": "mypy",
+			"args": [
+				"src/pyreadsb"
+			],
+			"group": "build",
+			"problemMatcher": [
+				"$python"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Black Format Check",
+			"type": "shell",
+			"command": "black",
+			"args": [
+				"--check",
+				"--diff",
+				"src/",
+				"tests/"
+			],
+			"group": "build",
+			"problemMatcher": [],
+			"isBackground": false
+		},
+		{
+			"label": "Black Format",
+			"type": "shell",
+			"command": "black",
+			"args": [
+				"src/",
+				"tests/"
+			],
+			"group": "build",
+			"problemMatcher": [],
+			"isBackground": false
+		},
+		{
+			"label": "isort Check",
+			"type": "shell",
+			"command": "isort",
+			"args": [
+				"--check-only",
+				"--diff",
+				"src/",
+				"tests/"
+			],
+			"group": "build",
+			"problemMatcher": [],
+			"isBackground": false
+		},
+		{
+			"label": "isort Fix",
+			"type": "shell",
+			"command": "isort",
+			"args": [
+				"src/",
+				"tests/"
+			],
+			"group": "build",
+			"problemMatcher": [],
+			"isBackground": false
+		},
+		{
+			"label": "Run All Checks",
+			"type": "shell",
+			"command": "echo",
+			"args": [
+				"Running all static analysis checks..."
+			],
+			"group": "build",
+			"dependsOrder": "sequence",
+			"dependsOn": [
+				"Ruff Check",
+				"Ruff Format Check",
+				"MyPy Type Check",
+				"Black Format Check",
+				"isort Check"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Format All",
+			"type": "shell",
+			"command": "echo",
+			"args": [
+				"Formatting all code..."
+			],
+			"group": "build",
+			"dependsOrder": "sequence",
+			"dependsOn": [
+				"isort Fix",
+				"Black Format",
+				"Ruff Format"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Test and Check",
+			"type": "shell",
+			"command": "echo",
+			"args": [
+				"Running tests and all checks..."
+			],
+			"group": "test",
+			"dependsOrder": "sequence",
+			"dependsOn": [
+				"Run All Checks",
+				"Run Tests"
+			],
+			"isBackground": false
+		}
+	]
+}
