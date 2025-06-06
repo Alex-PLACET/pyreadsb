@@ -136,9 +136,7 @@ class HeatmapDecoder:
             # Restore file position
             file_handle.seek(original_pos)
 
-    def _detect_endianness(
-        self, data_source: FileProtocol | bytes
-    ) -> struct.Struct:
+    def _detect_endianness(self, data_source: FileProtocol | bytes) -> struct.Struct:
         """Detect endianness by reading first few entries."""
         if isinstance(data_source, bytes):
             return self._detect_endianess_from_bytes(data_source)
