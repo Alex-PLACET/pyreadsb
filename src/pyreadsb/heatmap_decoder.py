@@ -142,11 +142,8 @@ class HeatmapDecoder:
         """Detect endianness by reading first few entries."""
         if isinstance(data_source, bytes):
             return self._detect_endianess_from_bytes(data_source)
-        elif isinstance(data_source, FileProtocol):
-            return self._detect_endianness_from_file(data_source)
-        else:
-            self.logger.error("Unsupported data source type for endianness detection.")
-            raise TypeError("Unsupported data source type. Must be bytes or file-like.")
+
+        return self._detect_endianness_from_file(data_source)
 
     def _decode_timestamp(self, hex_val: int, lat: int, lon: int) -> float:
         """Decode timestamp from separator entry."""
