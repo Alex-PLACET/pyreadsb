@@ -30,7 +30,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.ruff]
-target-version = "1.0.2"
+target-version = "py312"
 line-length = 88
 
 [tool.ruff.lint]
