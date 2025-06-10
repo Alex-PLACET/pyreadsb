@@ -199,6 +199,46 @@
 				"Run Tests"
 			],
 			"isBackground": false
+		},
+		{
+			"label": "Install Pre-commit Hooks",
+			"type": "shell",
+			"command": "uv",
+			"args": [
+				"run",
+				"pre-commit",
+				"install"
+			],
+			"group": "build",
+			"problemMatcher": [],
+			"isBackground": false
+		},
+		{
+			"label": "Run Pre-commit on All Files",
+			"type": "shell",
+			"command": "uv",
+			"args": [
+				"run",
+				"pre-commit",
+				"run",
+				"--all-files"
+			],
+			"group": "build",
+			"problemMatcher": [],
+			"isBackground": false
+		},
+		{
+			"label": "Update Pre-commit Hooks",
+			"type": "shell",
+			"command": "uv",
+			"args": [
+				"run",
+				"pre-commit",
+				"autoupdate"
+			],
+			"group": "build",
+			"problemMatcher": [],
+			"isBackground": false
 		}
 	]
 }
