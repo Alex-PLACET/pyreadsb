@@ -71,10 +71,9 @@ def get_aircraft_record(trace_file: Path) -> AircraftRecord:
         )
 
 
-def process_traces_from_json_bytes(trace_bytes: bytes) -> Generator[TraceEntry]:
-    """Process traces from JSON bytes."""
-    # Parse timestamp first
-    parser = ijson.parse(trace_bytes)
+def _parse_timestamp_from_source(json_source: Any) -> datetime:
+    """Parse timestamp from a JSON source (file handle or bytes)."""
+    parser = ijson.parse(json_source)
     timestamp_value = None
     for prefix, event, value in parser:
         if prefix == "timestamp" and event == "number":
@@ -84,68 +83,49 @@ def process_traces_from_json_bytes(trace_bytes: bytes) -> Generator[TraceEntry]:
     if timestamp_value is None:
         raise ValueError("No timestamp found in JSON")
 
-    timestamp_dt: Final[datetime] = datetime.fromtimestamp(float(timestamp_value))
+    return datetime.fromtimestamp(float(timestamp_value))
+
+
+def _create_trace_entry(trace: list[Any], timestamp_dt: datetime) -> TraceEntry:
+    """Create a TraceEntry from trace data and base timestamp."""
+    second_after_timestamp: float = float(trace[0])
+    altitude = trace[3] if trace[3] != "ground" else -1
+
+    return TraceEntry(
+        latitude=float(trace[1]),
+        longitude=float(trace[2]),
+        altitude=altitude,
+        ground_speed=float(trace[4]),
+        track=float(trace[5]) if trace[5] is not None else None,
+        flags=int(trace[6]),
+        vertical_rate=int(trace[7]) if trace[7] is not None else None,
+        aircraft=trace[8],
+        source=trace[9],
+        geometric_altitude=int(trace[10]) if trace[10] is not None else None,
+        geometric_vertical_rate=int(trace[11]) if trace[11] is not None else None,
+        indicated_airspeed=int(trace[12]) if trace[12] is not None else None,
+        roll_angle=int(trace[13]) if trace[13] is not None else None,
+        timestamp=timestamp_dt + timedelta(seconds=second_after_timestamp),
+    )
+
+
+def process_traces_from_json_bytes(trace_bytes: bytes) -> Generator[TraceEntry]:
+    """Process traces from JSON bytes."""
+    timestamp_dt: Final[datetime] = _parse_timestamp_from_source(trace_bytes)
 
     # Parse traces
     traces = ijson.items(trace_bytes, "trace.item")
     for trace in traces:
-        second_after_timestamp: float = float(trace[0])
-        altitude = trace[3] if trace[3] != "ground" else -1
-        yield TraceEntry(
-            latitude=float(trace[1]),
-            longitude=float(trace[2]),
-            altitude=altitude,
-            ground_speed=float(trace[4]),
-            track=float(trace[5]) if trace[5] is not None else None,
-            flags=int(trace[6]),
-            vertical_rate=int(trace[7]) if trace[7] is not None else None,
-            aircraft=trace[8],
-            source=trace[9],
-            geometric_altitude=int(trace[10]) if trace[10] is not None else None,
-            geometric_vertical_rate=int(trace[11]) if trace[11] is not None else None,
-            indicated_airspeed=int(trace[12]) if trace[12] is not None else None,
-            roll_angle=int(trace[13]) if trace[13] is not None else None,
-            timestamp=timestamp_dt + timedelta(seconds=second_after_timestamp),
-        )
+        yield _create_trace_entry(trace, timestamp_dt)
 
 
 def process_traces_from_file(trace_file: Path) -> Generator[TraceEntry]:
     """Process traces from a gzipped JSON file."""
     with open_file(trace_file) as f:
-        # Parse timestamp first
-        parser = ijson.parse(f)
-        timestamp_value = None
-        for prefix, event, value in parser:
-            if prefix == "timestamp" and event == "number":
-                timestamp_value = value
-                break
+        timestamp_dt: Final[datetime] = _parse_timestamp_from_source(f)
 
-        if timestamp_value is None:
-            raise ValueError("No timestamp found in file")
-
-        timestamp_dt: Final[datetime] = datetime.fromtimestamp(
-            float(timestamp_value)
-        )  # Reset file and parse traces
+        # Reset file and parse traces
         f.seek(0)
         traces = ijson.items(f, "trace.item")
         for trace in traces:
-            second_after_timestamp: float = float(trace[0])
-            altitude = trace[3] if trace[3] != "ground" else -1
-            yield TraceEntry(
-                latitude=float(trace[1]),
-                longitude=float(trace[2]),
-                altitude=altitude,
-                ground_speed=float(trace[4]),
-                track=float(trace[5]) if trace[5] is not None else None,
-                flags=int(trace[6]),
-                vertical_rate=int(trace[7]) if trace[7] is not None else None,
-                aircraft=trace[8],
-                source=trace[9],
-                geometric_altitude=int(trace[10]) if trace[10] is not None else None,
-                geometric_vertical_rate=int(trace[11])
-                if trace[11] is not None
-                else None,
-                indicated_airspeed=int(trace[12]) if trace[12] is not None else None,
-                roll_angle=int(trace[13]) if trace[13] is not None else None,
-                timestamp=timestamp_dt + timedelta(seconds=second_after_timestamp),
-            )
+            yield _create_trace_entry(trace, timestamp_dt)
