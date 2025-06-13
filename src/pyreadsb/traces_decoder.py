@@ -65,7 +65,32 @@ def get_aircraft_record(trace_file: Path) -> AircraftRecord:
         )
 
 
-def process_traces(trace_file: Path) -> Generator[TraceEntry, Any, None]:
+def process_traces_from_json_bytes(trace_bytes: bytes) -> Generator[TraceEntry]:
+    data_timestamp = ijson.items(trace_bytes, "item.timestamp")
+    timestamp_dt: Final[datetime] = datetime.fromtimestamp(data_timestamp)
+    traces = ijson.items(trace_bytes, "item.traces")
+    for trace in traces:
+        second_after_timestamp: float = trace[0]
+        altitude = trace[3] if trace[3] != "ground" else -1
+        yield TraceEntry(
+            latitude=trace[1],
+            longitude=trace[2],
+            altitude=altitude,
+            ground_speed=trace[4],
+            track=trace[5],
+            flags=trace[6],
+            vertical_rate=trace[7],
+            aircraft=trace[8],
+            source=trace[9],
+            geometric_altitude=trace[10],
+            geometric_vertical_rate=trace[11],
+            indicated_airspeed=trace[12],
+            roll_angle=trace[13],
+            timestamp=timestamp_dt + timedelta(seconds=second_after_timestamp),
+        )
+
+
+def process_traces_from_file(trace_file: Path) -> Generator[TraceEntry, Any, None]:
     """Process traces from a gzipped JSON file."""
     with open_file(trace_file) as f:
         data_timestamp = ijson.items(f, "item.timestamp")

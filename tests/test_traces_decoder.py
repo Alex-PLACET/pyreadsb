@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pyreadsb.traces_decoder import get_aircraft_record, process_traces
+from pyreadsb.traces_decoder import get_aircraft_record, process_traces_from_file
 
 
 class TestGetAircraftRecord:
@@ -180,7 +180,7 @@ class TestProcessTraces:
             mock_open_file.return_value.__enter__.return_value = mock_file
             mock_ijson_items.side_effect = [mock_timestamp, mock_traces]
 
-            traces = list(process_traces(Path("test.json.gz")))
+            traces = list(process_traces_from_file(Path("test.json.gz")))
 
             assert len(traces) == 2
 
@@ -224,7 +224,7 @@ class TestProcessTraces:
             mock_open_file.return_value.__enter__.return_value = mock_file
             mock_ijson_items.side_effect = [mock_timestamp, mock_traces]
 
-            traces = list(process_traces(Path("test.json.gz")))
+            traces = list(process_traces_from_file(Path("test.json.gz")))
             assert len(traces) == 0
 
     def test_process_traces_ground_altitude(self):
@@ -257,7 +257,7 @@ class TestProcessTraces:
             mock_open_file.return_value.__enter__.return_value = mock_file
             mock_ijson_items.side_effect = [mock_timestamp, mock_traces]
 
-            traces = list(process_traces(Path("test.json.gz")))
+            traces = list(process_traces_from_file(Path("test.json.gz")))
             assert traces[0].altitude == -1
 
     def test_process_traces_file_error(self):
@@ -266,7 +266,7 @@ class TestProcessTraces:
             mock_open_file.side_effect = FileNotFoundError("File not found")
 
             with pytest.raises(FileNotFoundError):
-                list(process_traces(Path("nonexistent.json.gz")))
+                list(process_traces_from_file(Path("nonexistent.json.gz")))
 
     def test_process_traces_json_error(self):
         """Test handling of JSON parsing errors."""
@@ -279,7 +279,7 @@ class TestProcessTraces:
             mock_ijson_items.side_effect = ValueError("Invalid JSON")
 
             with pytest.raises(ValueError):
-                list(process_traces(Path("invalid.json.gz")))
+                list(process_traces_from_file(Path("invalid.json.gz")))
 
     def test_process_traces_timestamp_calculation(self):
         """Test timestamp calculation with seconds offset."""
@@ -311,6 +311,6 @@ class TestProcessTraces:
             mock_open_file.return_value.__enter__.return_value = mock_file
             mock_ijson_items.side_effect = [mock_timestamp, mock_traces]
 
-            traces = list(process_traces(Path("test.json.gz")))
+            traces = list(process_traces_from_file(Path("test.json.gz")))
             expected_timestamp = datetime.fromtimestamp(1609459200.0 + 15.5)
             assert traces[0].timestamp == expected_timestamp
