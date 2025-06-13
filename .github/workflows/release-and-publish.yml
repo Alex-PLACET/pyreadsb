@@ -84,7 +84,7 @@ jobs:
       run: |
         $newVersion = "${{ steps.new_version.outputs.version }}"
         $content = Get-Content pyproject.toml -Raw
-        $updated = $content -replace 'version = "[^"]*"', "version = `"$newVersion`""
+        $updated = $content -replace '(?m)^(version = "[^"]*")', "version = `"$newVersion`""
         Set-Content pyproject.toml -Value $updated -NoNewline
         echo "Updated version to $newVersion"
       shell: pwsh
