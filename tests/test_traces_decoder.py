@@ -105,32 +105,32 @@ class TestProcessTraces:
         traces = list(process_traces_from_file(test_data_path))
 
         for i, trace in enumerate(traces[:10]):  # Check first 10 traces
-            assert isinstance(
-                trace.latitude, float
-            ), f"Trace {i}: latitude should be float"
-            assert isinstance(
-                trace.longitude, float
-            ), f"Trace {i}: longitude should be float"
+            assert isinstance(trace.latitude, float), (
+                f"Trace {i}: latitude should be float"
+            )
+            assert isinstance(trace.longitude, float), (
+                f"Trace {i}: longitude should be float"
+            )
             assert isinstance(trace.altitude, int), f"Trace {i}: altitude should be int"
-            assert isinstance(
-                trace.ground_speed, float
-            ), f"Trace {i}: ground_speed should be float"
-            assert trace.track is None or isinstance(
-                trace.track, float
-            ), f"Trace {i}: track should be float or None"
+            assert isinstance(trace.ground_speed, float), (
+                f"Trace {i}: ground_speed should be float"
+            )
+            assert trace.track is None or isinstance(trace.track, float), (
+                f"Trace {i}: track should be float or None"
+            )
             assert isinstance(trace.flags, int), f"Trace {i}: flags should be int"
             assert trace.vertical_rate is None or isinstance(
                 trace.vertical_rate, int
             ), f"Trace {i}: vertical_rate should be int or None"
-            assert trace.aircraft is None or isinstance(
-                trace.aircraft, dict
-            ), f"Trace {i}: aircraft should be dict or None"
-            assert trace.source is None or isinstance(
-                trace.source, str
-            ), f"Trace {i}: source should be str or None"
-            assert isinstance(
-                trace.timestamp, datetime
-            ), f"Trace {i}: timestamp should be datetime"
+            assert trace.aircraft is None or isinstance(trace.aircraft, dict), (
+                f"Trace {i}: aircraft should be dict or None"
+            )
+            assert trace.source is None or isinstance(trace.source, str), (
+                f"Trace {i}: source should be str or None"
+            )
+            assert isinstance(trace.timestamp, datetime), (
+                f"Trace {i}: timestamp should be datetime"
+            )
 
     def test_process_traces_ground_altitude_handling(self, test_data_path):
         """Test that ground altitude is handled correctly."""

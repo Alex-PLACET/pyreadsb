@@ -348,7 +348,7 @@ wheels = [
 
 [[package]]
 name = "pyreadsb"
-version = "1.0.2"
+version = "1.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "ijson" },
@@ -384,7 +384,7 @@ requires-dist = [
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "pytest", specifier = ">=8.4.0" },
     { name = "pytest-cov", specifier = ">=6.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11.0" },
     { name = "tzdata", specifier = ">=2025.2" },
 ]
 provides-extras = ["dataframe", "dev"]

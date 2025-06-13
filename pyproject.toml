@@ -19,7 +19,7 @@ dataframe = [
     "polars[pyarrow,timezone]>=1.30.0",
 ]
 dev = [
-    "ruff>=0.8.0",
+    "ruff>=0.11.0",
     "mypy>=1.13.0",
     "black>=24.0.0",
     "isort>=5.13.0",
