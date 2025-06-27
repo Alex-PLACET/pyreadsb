@@ -30,7 +30,7 @@ class TraceEntry:
     latitude: float
     longitude: float
     altitude: int
-    ground_speed: float
+    ground_speed: float | None
     track: float | None
     flags: int
     vertical_rate: int | None
@@ -95,7 +95,7 @@ def _create_trace_entry(trace: list[Any], timestamp_dt: datetime) -> TraceEntry:
         latitude=float(trace[1]),
         longitude=float(trace[2]),
         altitude=altitude,
-        ground_speed=float(trace[4]),
+        ground_speed=float(trace[4]) if trace[4] is not None else None,
         track=float(trace[5]) if trace[5] is not None else None,
         flags=int(trace[6]),
         vertical_rate=int(trace[7]) if trace[7] is not None else None,
