@@ -43,6 +43,19 @@ class TraceEntry:
     timestamp: datetime
 
 
+TRACE_FLAG_STALE: Final[int] = 1
+TRACE_FLAG_NEW_LEG: Final[int] = 2
+TRACE_FLAG_VERTICAL_RATE_GEOMETRIC: Final[int] = 4
+TRACE_FLAG_ALTITUDE_GEOMETRIC: Final[int] = 8
+
+TRACE_FLAGS = {
+    TRACE_FLAG_STALE,
+    TRACE_FLAG_NEW_LEG,
+    TRACE_FLAG_VERTICAL_RATE_GEOMETRIC,
+    TRACE_FLAG_ALTITUDE_GEOMETRIC,
+}
+
+
 def get_aircraft_record(trace_file: Path) -> AircraftRecord:
     """Extract aircraft record from a gzipped JSON file."""
     with open_file(trace_file) as f:
