@@ -313,7 +313,7 @@ class HeatmapDecoder:
         self.logger.info(f"Decoding file: {file_path}")
 
         # Read in chunks for better I/O performance (64KB = 4096 entries)
-        BUFFER_SIZE: Final[int] = 65536
+        buffer_size: Final[int] = 65536
 
         with open_file(file_path) as f:
             # Detect endianness from file
@@ -324,7 +324,7 @@ class HeatmapDecoder:
 
             leftover = b""
             while True:
-                chunk = f.read(BUFFER_SIZE)
+                chunk = f.read(buffer_size)
                 if not chunk:
                     if leftover:
                         self.logger.warning(

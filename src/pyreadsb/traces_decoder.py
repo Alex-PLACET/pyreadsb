@@ -60,7 +60,7 @@ def get_aircraft_record(trace_file: Path) -> AircraftRecord:
     """Extract aircraft record from a gzipped JSON file."""
     # Fields we need to extract
     required_fields = {"icao", "r", "t", "dbFlags", "desc", "ownOp", "year", "timestamp"}
-    
+
     with open_file(trace_file) as f:
         data: dict[str, Any] = {}
         parser = ijson.parse(f)

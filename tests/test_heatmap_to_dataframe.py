@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Final
 
 import polars as pl
-from polars.exceptions import ComputeError, SchemaError
 import pytest
+from polars.exceptions import ComputeError, SchemaError
 
 from pyreadsb.heatmap_decoder import HeatmapDecoder
 from pyreadsb.heatmap_to_dataframe import convert_to_dataframes, export_to_parquet
