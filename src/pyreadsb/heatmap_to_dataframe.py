@@ -29,11 +29,8 @@ def convert_to_dataframes(
 
     for entry in entries:
         if isinstance(entry, HeatmapDecoder.TimestampSeparator):
-            # Convert float timestamp to datetime relative to start_timestamp
-            offset_seconds = entry.timestamp
-            current_timestamp = datetime.fromtimestamp(
-                start_timestamp.timestamp() + offset_seconds, tz=UTC
-            )
+            # Use the decoded timestamp directly (already a datetime)
+            current_timestamp = entry.timestamp
         elif isinstance(entry, HeatmapDecoder.HeatEntry):
             heat_data.append(
                 {
@@ -77,9 +74,9 @@ def convert_to_dataframes(
             {"hex_id": hex_id, "callsign": callsign}
             for hex_id, callsign in callsign_dict.items()
         ]
-        callsign_df = pl.DataFrame(callsign_data, schema=callsign_schema)  # type: ignore[arg-type]
+        callsign_df = pl.DataFrame(callsign_data, schema=callsign_schema)
     else:
-        callsign_df = pl.DataFrame(schema=callsign_schema)  # type: ignore[arg-type]
+        callsign_df = pl.DataFrame(schema=callsign_schema)
 
     return heat_df, callsign_df
 

@@ -2,6 +2,7 @@ import logging
 import struct
 from collections.abc import Generator
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import (
     Final,
@@ -55,13 +56,13 @@ class HeatmapDecoder:
     class TimestampSeparator:
         """Represents a timestamp separator between data chunks."""
 
-        timestamp: float
+        timestamp: datetime
         raw_data: bytes
 
     __slots__ = ("current_timestamp", "logger")
 
     def __init__(self) -> None:
-        self.current_timestamp: float | None = None
+        self.current_timestamp: datetime | None = None
         self.logger = logging.getLogger(__name__)
 
     def _check_entry_endianness(self, entry_data: bytes) -> struct.Struct | None:
@@ -137,15 +138,15 @@ class HeatmapDecoder:
 
         return self._detect_endianness_from_file(data_source)
 
-    def _decode_timestamp(self, hex_val: int, lat: int, lon: int) -> float:
+    def _decode_timestamp(self, lat: int, lon: int) -> datetime:
         """Decode timestamp from separator entry."""
         # Based on the original decoder: now = i3u / 1000 + i2u * 4294967.296
         # Where i2u and i3u are the lat and lon values as unsigned integers
         lat_u: Final[int] = lat & 0xFFFFFFFF  # Convert to unsigned
         lon_u: Final[int] = lon & 0xFFFFFFFF  # Convert to unsigned
 
-        timestamp: Final[float] = lon_u / 1000.0 + lat_u * 4294967.296
-        return timestamp
+        timestamp_float: Final[float] = lon_u / 1000.0 + lat_u * 4294967.296
+        return datetime.fromtimestamp(timestamp_float, tz=UTC)
 
     def _decode_heat_entry(
         self, hex_val: int, lat: int, lon: int, alt: int, gs: int
@@ -227,7 +228,7 @@ class HeatmapDecoder:
         hex_val, lat, lon, alt, gs = entry_struct.unpack(data[: self.HEAT_ENTRY_SIZE])
         if hex_val == self.MAGIC_NUMBER:
             # Timestamp separator
-            timestamp: float = self._decode_timestamp(hex_val, lat, lon)
+            timestamp: datetime = self._decode_timestamp(lat, lon)
             self.current_timestamp = timestamp
 
             separator = self.TimestampSeparator(
@@ -266,7 +267,8 @@ class HeatmapDecoder:
 
             if hex_val == magic:
                 # Timestamp separator
-                timestamp = (lon & 0xFFFFFFFF) / 1000.0 + (lat & 0xFFFFFFFF) * 4294967.296
+                timestamp_float = (lon & 0xFFFFFFFF) / 1000.0 + (lat & 0xFFFFFFFF) * 4294967.296
+                timestamp = datetime.fromtimestamp(timestamp_float, tz=UTC)
                 self.current_timestamp = timestamp
                 yield self.TimestampSeparator(
                     timestamp=timestamp,
@@ -345,7 +347,8 @@ class HeatmapDecoder:
 
                     if hex_val == magic:
                         # Timestamp separator
-                        timestamp = (lon & 0xFFFFFFFF) / 1000.0 + (lat & 0xFFFFFFFF) * 4294967.296
+                        timestamp_float = (lon & 0xFFFFFFFF) / 1000.0 + (lat & 0xFFFFFFFF) * 4294967.296
+                        timestamp = datetime.fromtimestamp(timestamp_float, tz=UTC)
                         self.current_timestamp = timestamp
                         yield self.TimestampSeparator(
                             timestamp=timestamp,

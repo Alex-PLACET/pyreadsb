@@ -44,12 +44,12 @@ class TestConvertToDataframes:
 
         def timestamp_generator():
             yield HeatmapDecoder.TimestampSeparator(
-                timestamp=3600.0,
-                raw_data=b"\x00" * 16,  # 1 hour offset
+                timestamp=datetime(2024, 1, 1, 1, 0, 0, tzinfo=UTC),
+                raw_data=b"\x00" * 16,
             )
             yield HeatmapDecoder.TimestampSeparator(
-                timestamp=7200.0,
-                raw_data=b"\x00" * 16,  # 2 hour offset
+                timestamp=datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC),
+                raw_data=b"\x00" * 16,
             )
 
         start_timestamp = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
@@ -119,12 +119,15 @@ class TestConvertToDataframes:
 
     def test_convert_mixed_entries(self):
         """Test conversion with mixed entry types."""
+        # Define timestamps as datetime objects (as returned by decoder)
+        first_timestamp = datetime(2024, 1, 1, 1, 0, 0, tzinfo=UTC)
+        second_timestamp = datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC)
 
         def mixed_generator():
             # Start with a timestamp
             yield HeatmapDecoder.TimestampSeparator(
-                timestamp=3600.0,
-                raw_data=b"\x00" * 16,  # 1 hour offset
+                timestamp=first_timestamp,
+                raw_data=b"\x00" * 16,
             )
 
             # Add heat entry
@@ -141,8 +144,8 @@ class TestConvertToDataframes:
 
             # Another timestamp
             yield HeatmapDecoder.TimestampSeparator(
-                timestamp=7200.0,
-                raw_data=b"\x00" * 16,  # 2 hour offset
+                timestamp=second_timestamp,
+                raw_data=b"\x00" * 16,
             )
 
             # Another heat entry with new timestamp
@@ -150,6 +153,7 @@ class TestConvertToDataframes:
                 hex_id="def456", lat=40.7128, lon=-74.0060, alt=2000, ground_speed=300.0
             )
 
+        # start_timestamp is ignored when TimestampSeparator provides absolute timestamps
         start_timestamp = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
         heat_df, callsign_df = convert_to_dataframes(mixed_generator(), start_timestamp)
 
@@ -159,9 +163,7 @@ class TestConvertToDataframes:
         # Check heat data
         assert heat_df["hex_id"].to_list() == ["abc123", "def456"]
 
-        # Check timestamps are updated correctly
-        first_timestamp = datetime(2024, 1, 1, 1, 0, 0, tzinfo=UTC)  # +1 hour
-        second_timestamp = datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC)  # +2 hours
+        # Check timestamps are the absolute values from TimestampSeparator
         assert heat_df["timestamp"].to_list() == [first_timestamp, second_timestamp]
 
         # Check callsign data

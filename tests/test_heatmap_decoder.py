@@ -1,4 +1,5 @@
 import struct
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -47,28 +48,36 @@ class TestHeatmapDecoder:
         assert callsign_entry.callsign == "UAL123"
 
         # Test TimestampSeparator
+        test_timestamp = datetime.fromtimestamp(1609459200.0, tz=UTC)
         timestamp_sep = HeatmapDecoder.TimestampSeparator(
-            timestamp=1609459200.0,
+            timestamp=test_timestamp,
             raw_data=b"\x9d\x7c\x7f\x0e\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
         )
-        assert timestamp_sep.timestamp == 1609459200.0
+        assert timestamp_sep.timestamp == test_timestamp
         assert len(timestamp_sep.raw_data) == 16
 
     def test_decode_timestamp(self):
         """Test timestamp decoding logic."""
-        # Test with known values
-        hex_val = HeatmapDecoder.MAGIC_NUMBER
-        lat = 0x12345678  # Example lat value
-        lon = 0x9ABCDEF0  # Example lon value
+        # Use realistic values that produce a valid Unix timestamp
+        # The formula is: lon_u / 1000.0 + lat_u * 4294967.296
+        # For timestamp ~1704067200 (2024-01-01 00:00:00 UTC):
+        # lat_u = 0 (to keep timestamp manageable), lon_u = 1704067200000
+        # But lon_u max is 2^32 = 4294967296, so we need to split
+        # lat_u = 396, lon_u = 1000000 -> 396 * 4294967.296 + 1000 = ~1700807209
+        lat = 396  # ~1700807209 seconds base
+        lon = 1000000  # +1000 seconds
 
-        timestamp = self.decoder._decode_timestamp(hex_val, lat, lon)
+        timestamp = self.decoder._decode_timestamp(lat, lon)
 
         # Verify calculation: lon_u / 1000.0 + lat_u * 4294967.296
         lat_u = lat & 0xFFFFFFFF
         lon_u = lon & 0xFFFFFFFF
-        expected = lon_u / 1000.0 + lat_u * 4294967.296
+        expected_float = lon_u / 1000.0 + lat_u * 4294967.296
+        expected = datetime.fromtimestamp(expected_float, tz=UTC)
 
         assert timestamp == expected
+        assert isinstance(timestamp, datetime)
+        assert timestamp.tzinfo is not None
 
     def test_decode_heat_entry_position(self):
         """Test decoding regular position entry."""
@@ -250,7 +259,8 @@ class TestHeatmapDecoderWithRealFile:
 
             if isinstance(entry, HeatmapDecoder.TimestampSeparator):
                 timestamp_count += 1
-                assert entry.timestamp > 0
+                assert isinstance(entry.timestamp, datetime)
+                assert entry.timestamp.tzinfo is not None  # Should be timezone-aware
                 assert len(entry.raw_data) == 16
 
             elif isinstance(entry, HeatmapDecoder.HeatEntry):
