@@ -1,6 +1,6 @@
 from collections.abc import Generator
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Final
 
@@ -9,7 +9,7 @@ import ijson
 from .compression_utils import open_file
 
 
-@dataclass
+@dataclass(slots=True)
 class AircraftRecord:
     """Dataclass to hold aircraft record information."""
 
@@ -23,7 +23,7 @@ class AircraftRecord:
     timestamp: datetime
 
 
-@dataclass
+@dataclass(slots=True)
 class TraceEntry:
     """Dataclass to hold trace entry information."""
 
@@ -48,24 +48,30 @@ TRACE_FLAG_NEW_LEG: Final[int] = 2
 TRACE_FLAG_VERTICAL_RATE_GEOMETRIC: Final[int] = 4
 TRACE_FLAG_ALTITUDE_GEOMETRIC: Final[int] = 8
 
-TRACE_FLAGS = {
+TRACE_FLAGS = frozenset({
     TRACE_FLAG_STALE,
     TRACE_FLAG_NEW_LEG,
     TRACE_FLAG_VERTICAL_RATE_GEOMETRIC,
     TRACE_FLAG_ALTITUDE_GEOMETRIC,
-}
+})
 
 
 def get_aircraft_record(trace_file: Path) -> AircraftRecord:
     """Extract aircraft record from a gzipped JSON file."""
+    # Fields we need to extract
+    required_fields = {"icao", "r", "t", "dbFlags", "desc", "ownOp", "year", "timestamp"}
+    
     with open_file(trace_file) as f:
-        # Parse the top-level JSON object
-        data = {}
+        data: dict[str, Any] = {}
         parser = ijson.parse(f)
         for prefix, event, value in parser:
-            if event in ("string", "number", "boolean", "null"):
+            if prefix in required_fields and event in ("string", "number", "boolean", "null"):
                 data[prefix] = value
+                # Early exit once we have all required fields
+                if len(data) == len(required_fields):
+                    break
 
+        year_val = data.get("year")
         return AircraftRecord(
             icao=data["icao"],
             r=data["r"],
@@ -73,36 +79,15 @@ def get_aircraft_record(trace_file: Path) -> AircraftRecord:
             db_flags=data["dbFlags"],
             description=data["desc"],
             own_op=data["ownOp"],
-            year=(
-                0
-                if data.get("year") == "0000"
-                else int(data.get("year", 0))
-                if data.get("year")
-                else None
-            ),
-            timestamp=datetime.fromtimestamp(float(data["timestamp"])),
+            year=None if year_val is None or year_val == "0000" else int(year_val),
+            timestamp=datetime.fromtimestamp(float(data["timestamp"]), tz=UTC),
         )
-
-
-def _parse_timestamp_from_source(json_source: Any) -> datetime:
-    """Parse timestamp from a JSON source (file handle or bytes)."""
-    parser = ijson.parse(json_source)
-    timestamp_value = None
-    for prefix, event, value in parser:
-        if prefix == "timestamp" and event == "number":
-            timestamp_value = value
-            break
-
-    if timestamp_value is None:
-        raise ValueError("No timestamp found in JSON")
-
-    return datetime.fromtimestamp(float(timestamp_value))
 
 
 def _create_trace_entry(trace: list[Any], timestamp_dt: datetime) -> TraceEntry:
     """Create a TraceEntry from trace data and base timestamp."""
-    second_after_timestamp: float = float(trace[0])
-    altitude = trace[3] if trace[3] != "ground" else -1
+    offset_seconds: float = float(trace[0])
+    altitude: int = trace[3] if trace[3] != "ground" else -1
 
     return TraceEntry(
         latitude=float(trace[1]),
@@ -118,27 +103,40 @@ def _create_trace_entry(trace: list[Any], timestamp_dt: datetime) -> TraceEntry:
         geometric_vertical_rate=int(trace[11]) if trace[11] is not None else None,
         indicated_airspeed=int(trace[12]) if trace[12] is not None else None,
         roll_angle=int(trace[13]) if trace[13] is not None else None,
-        timestamp=timestamp_dt + timedelta(seconds=second_after_timestamp),
+        timestamp=timestamp_dt + timedelta(seconds=offset_seconds),
     )
 
 
 def process_traces_from_json_bytes(trace_bytes: bytes) -> Generator[TraceEntry]:
     """Process traces from JSON bytes."""
-    timestamp_dt: Final[datetime] = _parse_timestamp_from_source(trace_bytes)
+    # Use kvitems to get timestamp and trace in single pass
+    timestamp_dt: datetime | None = None
 
-    # Parse traces
-    traces = ijson.items(trace_bytes, "trace.item")
-    for trace in traces:
-        yield _create_trace_entry(trace, timestamp_dt)
+    for key, value in ijson.kvitems(trace_bytes, ""):
+        if key == "timestamp":
+            timestamp_dt = datetime.fromtimestamp(float(value), tz=UTC)
+        elif key == "trace" and timestamp_dt is not None:
+            for trace in value:
+                yield _create_trace_entry(trace, timestamp_dt)
+            return
+
+    if timestamp_dt is None:
+        raise ValueError("No timestamp found in JSON")
 
 
 def process_traces_from_file(trace_file: Path) -> Generator[TraceEntry]:
     """Process traces from a gzipped JSON file."""
     with open_file(trace_file) as f:
-        timestamp_dt: Final[datetime] = _parse_timestamp_from_source(f)
+        # Use kvitems to get timestamp and trace in single pass
+        timestamp_dt: datetime | None = None
 
-        # Reset file and parse traces
-        f.seek(0)
-        traces = ijson.items(f, "trace.item")
-        for trace in traces:
-            yield _create_trace_entry(trace, timestamp_dt)
+        for key, value in ijson.kvitems(f, ""):
+            if key == "timestamp":
+                timestamp_dt = datetime.fromtimestamp(float(value), tz=UTC)
+            elif key == "trace" and timestamp_dt is not None:
+                for trace in value:
+                    yield _create_trace_entry(trace, timestamp_dt)
+                return
+
+        if timestamp_dt is None:
+            raise ValueError("No timestamp found in JSON")

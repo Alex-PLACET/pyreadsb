@@ -1,6 +1,6 @@
 import struct
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -12,16 +12,12 @@ class TestHeatmapDecoder:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.decoder = HeatmapDecoder(debug=True)
+        self.decoder = HeatmapDecoder()
 
     def test_init(self):
         """Test decoder initialization."""
         decoder = HeatmapDecoder()
-        assert not decoder.debug
         assert decoder.current_timestamp is None
-
-        debug_decoder = HeatmapDecoder(debug=True)
-        assert debug_decoder.debug
 
     def test_magic_number_constant(self):
         """Test magic number constant."""
@@ -185,29 +181,13 @@ class TestHeatmapDecoder:
         # This should just log a warning and continue, not raise ValueError
         self.decoder._detect_endianness(mock_file)
 
-    def test_log_debug_enabled(self):
-        """Test logging when debug is enabled."""
-        debug_decoder = HeatmapDecoder(debug=True)
-
-        with patch.object(debug_decoder.logger, "debug") as mock_debug:
-            debug_decoder._log("test message")
-            mock_debug.assert_called_once_with("test message")
-
-    def test_log_debug_disabled(self):
-        """Test logging when debug is disabled."""
-        no_debug_decoder = HeatmapDecoder(debug=False)
-
-        with patch.object(no_debug_decoder.logger, "debug") as mock_debug:
-            no_debug_decoder._log("test message")
-            mock_debug.assert_not_called()
-
 
 class TestHeatmapDecoderWithRealFile:
     """Test suite using the actual heatmap file."""
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.decoder = HeatmapDecoder(debug=True)
+        self.decoder = HeatmapDecoder()
         self.test_file_path = Path("tests/resources/16.bin.ttf")
 
     def test_file_exists(self):

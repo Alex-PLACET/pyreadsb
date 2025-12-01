@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -23,7 +23,7 @@ class TestGetAircraftRecord:
         assert result.description == "BOEING 737 MAX 8"
         assert result.own_op == "SOUTHWEST AIRLINES CO"
         assert result.year == 2023
-        assert result.timestamp == datetime.fromtimestamp(1723420800.000)
+        assert result.timestamp == datetime.fromtimestamp(1723420800.000, tz=UTC)
 
     def test_get_aircraft_record_file_not_found(self):
         """Test handling of missing file."""
@@ -59,7 +59,9 @@ class TestProcessTraces:
         assert first_trace.geometric_vertical_rate is None
         assert first_trace.indicated_airspeed is None
         assert first_trace.roll_angle is None
-        assert first_trace.timestamp == datetime.fromtimestamp(1723420800.000 + 5.06)
+        assert first_trace.timestamp == datetime.fromtimestamp(
+            1723420800.000 + 5.06, tz=UTC
+        )
 
         # Test a trace with aircraft data (4th trace, index 3)
         aircraft_trace = traces[3]
@@ -83,7 +85,7 @@ class TestProcessTraces:
         """Test that timestamps are calculated correctly."""
         traces = list(process_traces_from_file(test_data_path))
 
-        base_timestamp = datetime.fromtimestamp(1723420800.000)
+        base_timestamp = datetime.fromtimestamp(1723420800.000, tz=UTC)
 
         # Check that timestamps increase properly
         for i, trace in enumerate(traces[:5]):  # Check first 5 traces

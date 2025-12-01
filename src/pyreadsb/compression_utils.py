@@ -1,11 +1,11 @@
 import gzip
 from pathlib import Path
-from typing import BinaryIO, Final
+from typing import BinaryIO, Final, Literal
 
 GZIP_MAGIC: Final[bytes] = b"\x1f\x8b"  # Gzip file header magic
 
 
-def detect_compression(file_path: Path) -> str:
+def detect_compression(file_path: Path) -> Literal["gzip", "none"]:
     """Detect file compression type."""
     if file_path.suffix.lower() == ".gz":
         return "gzip"

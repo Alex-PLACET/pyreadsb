@@ -1,45 +1,29 @@
 import logging
-from collections.abc import Generator, Sequence
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Final
 
 import polars as pl
 
 from .heatmap_decoder import HeatmapDecoder
 
-logger: logging.Logger = logging.getLogger("pyreadsb")
+logger: Final[logging.Logger] = logging.getLogger(__name__)
 
 
 def convert_to_dataframes(
-    entries: Generator[
+    entries: Iterable[
         HeatmapDecoder.HeatEntry
         | HeatmapDecoder.CallsignEntry
-        | HeatmapDecoder.TimestampSeparator,
-        None,
-        None,
+        | HeatmapDecoder.TimestampSeparator
     ],
     start_timestamp: datetime,
     batch_size: int = 10000,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
-    """Convert generator entries to separate Polars DataFrames with iterative processing."""
-    # Initialize empty dataframes with proper schemas
-    heat_df = pl.DataFrame(
-        schema={
-            "hex_id": pl.String,
-            "lat": pl.Float32,
-            "lon": pl.Float32,
-            "alt": pl.Int32,
-            "ground_speed": pl.Float32,
-            "timestamp": pl.Datetime("ms", "UTC"),
-        }
-    )
-
-    callsign_df = pl.DataFrame(
-        schema={
-            "hex_id": pl.String,
-            "callsign": pl.String,
-        }
-    )
+    """Convert entries to separate Polars DataFrames with batched processing."""
+    # Collect data in lists (much faster than row-by-row DataFrame concat)
+    heat_data: list[dict] = []
+    callsign_dict: dict[str, str | None] = {}  # Deduplicate by hex_id
 
     current_timestamp: datetime = start_timestamp
 
@@ -51,50 +35,57 @@ def convert_to_dataframes(
                 start_timestamp.timestamp() + offset_seconds, tz=UTC
             )
         elif isinstance(entry, HeatmapDecoder.HeatEntry):
-            # Create new row with current timestamp and add to dataframe
-            new_row = pl.DataFrame(
+            heat_data.append(
                 {
-                    "hex_id": [entry.hex_id],
-                    "lat": [entry.lat],
-                    "lon": [entry.lon],
-                    "alt": [entry.alt],
-                    "ground_speed": [entry.ground_speed],
-                    "timestamp": [current_timestamp],
-                },
-                schema={
-                    "hex_id": pl.String,
-                    "lat": pl.Float32,
-                    "lon": pl.Float32,
-                    "alt": pl.Int32,
-                    "ground_speed": pl.Float32,
-                    "timestamp": pl.Datetime("ms", "UTC"),
-                },
+                    "hex_id": entry.hex_id,
+                    "lat": entry.lat,
+                    "lon": entry.lon,
+                    "alt": entry.alt,
+                    "ground_speed": entry.ground_speed,
+                    "timestamp": current_timestamp,
+                }
             )
-            heat_df = pl.concat([heat_df, new_row], how="vertical")
-
         elif isinstance(entry, HeatmapDecoder.CallsignEntry):
-            # Create new row and add to callsign dataframe
-            new_row = pl.DataFrame(
-                {
-                    "hex_id": [entry.hex_id],
-                    "callsign": [entry.callsign],
-                },
-                schema={
-                    "hex_id": pl.String,
-                    "callsign": pl.String,
-                },
-            )
-            callsign_df = pl.concat([callsign_df, new_row], how="vertical")
+            # Keep last occurrence of each hex_id
+            callsign_dict[entry.hex_id] = entry.callsign
 
-    # Remove duplicates from callsign dataframe, keeping the last occurrence
-    if len(callsign_df) > 0:
-        callsign_df = callsign_df.unique(subset=["hex_id"], keep="last")
+    # Build DataFrames from collected data
+    heat_schema = {
+        "hex_id": pl.String,
+        "lat": pl.Float32,
+        "lon": pl.Float32,
+        "alt": pl.Int32,
+        "ground_speed": pl.Float32,
+        "timestamp": pl.Datetime("ms", "UTC"),
+    }
+
+    callsign_schema = {
+        "hex_id": pl.String,
+        "callsign": pl.String,
+    }
+
+    heat_df: pl.DataFrame
+    callsign_df: pl.DataFrame
+
+    if heat_data:
+        heat_df = pl.DataFrame(heat_data, schema=heat_schema)  # type: ignore[arg-type]
+    else:
+        heat_df = pl.DataFrame(schema=heat_schema)  # type: ignore[arg-type]
+
+    if callsign_dict:
+        callsign_data = [
+            {"hex_id": hex_id, "callsign": callsign}
+            for hex_id, callsign in callsign_dict.items()
+        ]
+        callsign_df = pl.DataFrame(callsign_data, schema=callsign_schema)  # type: ignore[arg-type]
+    else:
+        callsign_df = pl.DataFrame(schema=callsign_schema)  # type: ignore[arg-type]
 
     return heat_df, callsign_df
 
 
 def export_to_parquet(
-    entries: Sequence[
+    entries: Iterable[
         HeatmapDecoder.HeatEntry
         | HeatmapDecoder.CallsignEntry
         | HeatmapDecoder.TimestampSeparator

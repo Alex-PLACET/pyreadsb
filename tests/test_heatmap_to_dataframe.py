@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Final
 
 import polars as pl
+from polars.exceptions import ComputeError, SchemaError
 import pytest
 
 from pyreadsb.heatmap_decoder import HeatmapDecoder
@@ -210,7 +211,7 @@ class TestConvertToDataframes:
 
         # This should raise an error due to mixed types in alt column
         with pytest.raises(
-            (pl.SchemaError, pl.ComputeError, TypeError, ValueError)
+            (SchemaError, ComputeError, TypeError, ValueError)
         ):  # Polars will raise an error for mixed types
             convert_to_dataframes(special_altitude_generator(), start_timestamp)
 

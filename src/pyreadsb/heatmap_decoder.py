@@ -34,9 +34,7 @@ class HeatmapDecoder:
     )  # Little endian: uint32, int32, int32, uint16, uint16
     HEAT_ENTRY_BE: Final[struct.Struct] = struct.Struct(">IiiHH")  # Big endian
 
-    MODE_NON_ICAO_ADDRESS: Final[int] = 1 << 24  # Non-ICAO address type mask
-
-    @dataclass
+    @dataclass(slots=True)
     class HeatEntry:
         """Represents a decoded aircraft position entry."""
 
@@ -46,29 +44,25 @@ class HeatmapDecoder:
         alt: int | str | None
         ground_speed: float | None
 
-    @dataclass
+    @dataclass(slots=True)
     class CallsignEntry:
         """Represents aircraft callsign information."""
 
         hex_id: str
         callsign: str | None = None
 
-    @dataclass
+    @dataclass(slots=True)
     class TimestampSeparator:
         """Represents a timestamp separator between data chunks."""
 
         timestamp: float
         raw_data: bytes
 
-    def __init__(self, debug: bool = False):
-        self.debug = debug
+    __slots__ = ("current_timestamp", "logger")
+
+    def __init__(self) -> None:
         self.current_timestamp: float | None = None
         self.logger = logging.getLogger(__name__)
-
-    def _log(self, message: str) -> None:
-        """Log debug messages if debug mode is enabled."""
-        if self.debug:
-            self.logger.debug(message)
 
     def _check_entry_endianness(self, entry_data: bytes) -> struct.Struct | None:
         """Check a single entry for endianness markers. Returns struct format if found, None otherwise."""
@@ -92,11 +86,11 @@ class HeatmapDecoder:
         except struct.error:
             return None
 
-    def _detect_endianess_from_bytes(self, bytes: bytes) -> struct.Struct:
+    def _detect_endianness_from_bytes(self, data: bytes) -> struct.Struct:
         """Detect endianness from a bytes object."""
         pos = 0
-        while pos + self.HEAT_ENTRY_SIZE <= len(bytes):
-            entry_data = bytes[pos : pos + self.HEAT_ENTRY_SIZE]
+        while pos + self.HEAT_ENTRY_SIZE <= len(data):
+            entry_data = data[pos : pos + self.HEAT_ENTRY_SIZE]
             detected_struct = self._check_entry_endianness(entry_data)
 
             if detected_struct:
@@ -139,7 +133,7 @@ class HeatmapDecoder:
     def _detect_endianness(self, data_source: FileProtocol | bytes) -> struct.Struct:
         """Detect endianness by reading first few entries."""
         if isinstance(data_source, bytes):
-            return self._detect_endianess_from_bytes(data_source)
+            return self._detect_endianness_from_bytes(data_source)
 
         return self._detect_endianness_from_file(data_source)
 
@@ -192,12 +186,7 @@ class HeatmapDecoder:
             else:
                 ground_speed = gs / 10.0  # Convert to knots
 
-            # Extract addrtype (top 5 bits)
-            # addrtype_5bits = (hex_val >> 27) & 0x1F
-
             addr = hex_val & 0xFFFFFF
-
-            # non_icao_addr: bool = hex_val & self.MODE_NON_ICAO_ADDRESS != 0
 
             return self.HeatEntry(
                 hex_id=f"{addr:06x}",
@@ -212,20 +201,25 @@ class HeatmapDecoder:
     ) -> HeatEntry | CallsignEntry | TimestampSeparator:
         """
         Decode a single entry from binary data into the appropriate entry type.
+
         This method unpacks binary data using the provided struct and determines whether
         the entry represents a heat map entry, callsign entry, or timestamp separator
         based on the magic number detection.
+
         Args:
-            entry_struct (struct.Struct): The struct object used for unpacking binary data
-            data (bytes): Raw binary data to decode, must be at least HEAT_ENTRY_SIZE bytes. Only the first HEAT_ENTRY_SIZE bytes will be processed.
+            entry_struct: The struct object used for unpacking binary data.
+            data: Raw binary data to decode, must be at least HEAT_ENTRY_SIZE bytes.
+                Only the first HEAT_ENTRY_SIZE bytes will be processed.
+
         Returns:
-            HeatEntry | CallsignEntry | TimestampSeparator | None:
-                - HeatEntry or CallsignEntry for regular aircraft data
-                - TimestampSeparator when magic number is detected
-                - None if data is insufficient or parsing fails
+            HeatEntry or CallsignEntry for regular aircraft data, or
+            TimestampSeparator when magic number is detected.
+
+        Raises:
+            ValueError: If data is insufficient for decoding.
+
         Note:
             Updates self.current_timestamp when a timestamp separator is encountered.
-            Logs warnings for insufficient data or struct parsing errors.
         """
         if not data or len(data) < self.HEAT_ENTRY_SIZE:
             raise ValueError("Insufficient data for decoding.")
@@ -252,22 +246,63 @@ class HeatmapDecoder:
         self, data: bytes
     ) -> Generator[HeatEntry | CallsignEntry | TimestampSeparator, None, None]:
         """Decode entries from a bytes object."""
-        if not data or len(data) < self.HEAT_ENTRY_SIZE:
-            self.logger.warning("Insufficient data for decoding.")
+        data_len = len(data)
+        if data_len < self.HEAT_ENTRY_SIZE:
+            if data:
+                self.logger.warning("Insufficient data for decoding.")
+            return
 
         entry_struct: Final[struct.Struct] = self._detect_endianness(data)
+        unpack_from = entry_struct.unpack_from  # Cache method lookup
+        entry_size = self.HEAT_ENTRY_SIZE
+        magic = self.MAGIC_NUMBER
 
-        for pos in range(0, len(data), self.HEAT_ENTRY_SIZE):
-            entry_data: bytes = data[pos : pos + self.HEAT_ENTRY_SIZE]
-            if len(entry_data) != self.HEAT_ENTRY_SIZE:
-                self.logger.warning(
-                    f"Incomplete entry read at position {pos}: {len(entry_data)} bytes"
+        # Use memoryview to avoid copying
+        mv = memoryview(data)
+        max_pos = data_len - entry_size + 1
+
+        for pos in range(0, max_pos, entry_size):
+            hex_val, lat, lon, alt, gs = unpack_from(data, pos)
+
+            if hex_val == magic:
+                # Timestamp separator
+                timestamp = (lon & 0xFFFFFFFF) / 1000.0 + (lat & 0xFFFFFFFF) * 4294967.296
+                self.current_timestamp = timestamp
+                yield self.TimestampSeparator(
+                    timestamp=timestamp,
+                    raw_data=bytes(mv[pos : pos + entry_size]),
                 )
-                break
+            elif lat & (1 << 30):  # Info/callsign entry
+                callsign_bytes = struct.pack("<IH", lon & 0xFFFFFFFF, alt & 0xFFFF)
+                callsign = callsign_bytes.rstrip(b"\x00").decode("ascii", errors="ignore")
+                yield self.CallsignEntry(
+                    hex_id=f"{hex_val & 0xFFFFFF:06x}",
+                    callsign=callsign if callsign else None,
+                )
+            else:
+                # Regular position entry
+                altitude: int | str | None
+                if alt == -123:
+                    altitude = "ground"
+                elif alt == -124:
+                    altitude = None
+                else:
+                    altitude = alt * 25
 
-            entry = self._decode_entry(entry_struct, entry_data)
-            if entry:
-                yield entry
+                yield self.HeatEntry(
+                    hex_id=f"{hex_val & 0xFFFFFF:06x}",
+                    lat=lat / 1e6,
+                    lon=lon / 1e6,
+                    alt=altitude,
+                    ground_speed=None if gs == 65535 else gs / 10.0,
+                )
+
+        # Check for trailing incomplete data
+        remaining = data_len % entry_size
+        if remaining:
+            self.logger.warning(
+                f"Incomplete entry at end: {remaining} bytes"
+            )
 
     def decode_from_file(
         self, file_path: Path
@@ -275,22 +310,73 @@ class HeatmapDecoder:
         """Memory-efficient decoder that yields entries one by one."""
         self.logger.info(f"Decoding file: {file_path}")
 
+        # Read in chunks for better I/O performance (64KB = 4096 entries)
+        BUFFER_SIZE: Final[int] = 65536
+
         with open_file(file_path) as f:
             # Detect endianness from file
             entry_struct: Final[struct.Struct] = self._detect_endianness(f)
+            unpack_from = entry_struct.unpack_from  # Cache method lookup
+            entry_size = self.HEAT_ENTRY_SIZE
+            magic = self.MAGIC_NUMBER
 
+            leftover = b""
             while True:
-                # Read one entry at a time
-                entry_data = f.read(self.HEAT_ENTRY_SIZE)
-                if len(entry_data) != self.HEAT_ENTRY_SIZE:
-                    if not entry_data:
-                        self.logger.info("Reached end of file.")
-                    else:
+                chunk = f.read(BUFFER_SIZE)
+                if not chunk:
+                    if leftover:
                         self.logger.warning(
-                            f"Incomplete entry read: {len(entry_data)} bytes"
+                            f"Incomplete entry at end: {len(leftover)} bytes"
                         )
+                    else:
+                        self.logger.info("Reached end of file.")
                     break
 
-                entry = self._decode_entry(entry_struct, entry_data)
-                if entry:
-                    yield entry
+                # Combine leftover from previous chunk
+                if leftover:
+                    chunk = leftover + chunk
+                    leftover = b""
+
+                chunk_len = len(chunk)
+                max_pos = chunk_len - entry_size + 1
+
+                for pos in range(0, max_pos, entry_size):
+                    hex_val, lat, lon, alt, gs = unpack_from(chunk, pos)
+
+                    if hex_val == magic:
+                        # Timestamp separator
+                        timestamp = (lon & 0xFFFFFFFF) / 1000.0 + (lat & 0xFFFFFFFF) * 4294967.296
+                        self.current_timestamp = timestamp
+                        yield self.TimestampSeparator(
+                            timestamp=timestamp,
+                            raw_data=chunk[pos : pos + entry_size],
+                        )
+                    elif lat & (1 << 30):  # Info/callsign entry
+                        callsign_bytes = struct.pack("<IH", lon & 0xFFFFFFFF, alt & 0xFFFF)
+                        callsign = callsign_bytes.rstrip(b"\x00").decode("ascii", errors="ignore")
+                        yield self.CallsignEntry(
+                            hex_id=f"{hex_val & 0xFFFFFF:06x}",
+                            callsign=callsign if callsign else None,
+                        )
+                    else:
+                        # Regular position entry
+                        altitude: int | str | None
+                        if alt == -123:
+                            altitude = "ground"
+                        elif alt == -124:
+                            altitude = None
+                        else:
+                            altitude = alt * 25
+
+                        yield self.HeatEntry(
+                            hex_id=f"{hex_val & 0xFFFFFF:06x}",
+                            lat=lat / 1e6,
+                            lon=lon / 1e6,
+                            alt=altitude,
+                            ground_speed=None if gs == 65535 else gs / 10.0,
+                        )
+
+                # Save leftover bytes for next iteration
+                processed = (chunk_len // entry_size) * entry_size
+                if processed < chunk_len:
+                    leftover = chunk[processed:]
