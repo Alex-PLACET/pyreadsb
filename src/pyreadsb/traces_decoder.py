@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Final
 
-import ijson
+import json_stream
 
 from .compression_utils import open_file
 
@@ -60,44 +60,29 @@ TRACE_FLAGS = frozenset(
 
 def get_aircraft_record(trace_file: Path) -> AircraftRecord:
     """Extract aircraft record from a gzipped JSON file."""
-    # Fields we need to extract
-    required_fields = {
-        "icao",
-        "r",
-        "t",
-        "dbFlags",
-        "desc",
-        "ownOp",
-        "year",
-        "timestamp",
-    }
-
     with open_file(trace_file) as f:
-        data: dict[str, Any] = {}
-        parser = ijson.parse(f)
-        for prefix, event, value in parser:
-            if prefix in required_fields and event in (
-                "string",
-                "number",
-                "boolean",
-                "null",
-            ):
-                data[prefix] = value
-                # Early exit once we have all required fields
-                if len(data) == len(required_fields):
-                    break
+        data = json_stream.load(f)
 
-        year_val = data.get("year")
-        return AircraftRecord(
-            icao=data["icao"],
-            r=data["r"],
-            t=data["t"],
-            db_flags=data["dbFlags"],
-            description=data["desc"],
-            own_op=data["ownOp"],
-            year=None if year_val is None or year_val == "0000" else int(year_val),
-            timestamp=datetime.fromtimestamp(float(data["timestamp"]), tz=UTC),
-        )
+        # Access fields - json_stream returns transient objects, read them immediately
+        icao = data["icao"]
+        r = data["r"]
+        t = data["t"]
+        db_flags = data["dbFlags"]
+        description = data["desc"]
+        own_op = data["ownOp"]
+        year_val = data["year"]
+        timestamp_val = data["timestamp"]
+
+    return AircraftRecord(
+        icao=icao,
+        r=r,
+        t=t,
+        db_flags=db_flags,
+        description=description,
+        own_op=own_op,
+        year=None if year_val is None or year_val == "0000" else int(year_val),
+        timestamp=datetime.fromtimestamp(float(timestamp_val), tz=UTC),
+    )
 
 
 def _create_trace_entry(trace: list[Any], timestamp_dt: datetime) -> TraceEntry:
@@ -125,34 +110,34 @@ def _create_trace_entry(trace: list[Any], timestamp_dt: datetime) -> TraceEntry:
 
 def process_traces_from_json_bytes(trace_bytes: bytes) -> Generator[TraceEntry]:
     """Process traces from JSON bytes."""
-    # Use kvitems to get timestamp and trace in single pass
-    timestamp_dt: datetime | None = None
+    import io
 
-    for key, value in ijson.kvitems(trace_bytes, ""):
-        if key == "timestamp":
-            timestamp_dt = datetime.fromtimestamp(float(value), tz=UTC)
-        elif key == "trace" and timestamp_dt is not None:
-            for trace in value:
-                yield _create_trace_entry(trace, timestamp_dt)
-            return
+    data = json_stream.load(io.BytesIO(trace_bytes))
 
-    if timestamp_dt is None:
+    timestamp_val = data.get("timestamp")
+    if timestamp_val is None:
         raise ValueError("No timestamp found in JSON")
+
+    timestamp_dt = datetime.fromtimestamp(float(timestamp_val), tz=UTC)
+
+    # Stream through trace array, converting each trace to standard types immediately
+    for trace in data.get("trace", []):
+        trace_list = json_stream.to_standard_types(trace)
+        yield _create_trace_entry(trace_list, timestamp_dt)
 
 
 def process_traces_from_file(trace_file: Path) -> Generator[TraceEntry]:
     """Process traces from a gzipped JSON file."""
     with open_file(trace_file) as f:
-        # Use kvitems to get timestamp and trace in single pass
-        timestamp_dt: datetime | None = None
+        data = json_stream.load(f)
 
-        for key, value in ijson.kvitems(f, ""):
-            if key == "timestamp":
-                timestamp_dt = datetime.fromtimestamp(float(value), tz=UTC)
-            elif key == "trace" and timestamp_dt is not None:
-                for trace in value:
-                    yield _create_trace_entry(trace, timestamp_dt)
-                return
-
-        if timestamp_dt is None:
+        timestamp_val = data.get("timestamp")
+        if timestamp_val is None:
             raise ValueError("No timestamp found in JSON")
+
+        timestamp_dt = datetime.fromtimestamp(float(timestamp_val), tz=UTC)
+
+        # Stream through trace array, converting each trace to standard types immediately
+        for trace in data.get("trace", []):
+            trace_list = json_stream.to_standard_types(trace)
+            yield _create_trace_entry(trace_list, timestamp_dt)
