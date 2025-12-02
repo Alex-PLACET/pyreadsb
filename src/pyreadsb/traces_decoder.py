@@ -2,9 +2,10 @@ from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 
 import json_stream
+from json_stream.base import TransientStreamingJSONObject
 
 from .compression_utils import open_file
 
@@ -61,17 +62,17 @@ TRACE_FLAGS = frozenset(
 def get_aircraft_record(trace_file: Path) -> AircraftRecord:
     """Extract aircraft record from a gzipped JSON file."""
     with open_file(trace_file) as f:
-        data = json_stream.load(f)
+        data = cast(TransientStreamingJSONObject, json_stream.load(f))
 
         # Access fields - json_stream returns transient objects, read them immediately
-        icao = data["icao"]
-        r = data["r"]
-        t = data["t"]
-        db_flags = data["dbFlags"]
-        description = data["desc"]
-        own_op = data["ownOp"]
-        year_val = data["year"]
-        timestamp_val = data["timestamp"]
+        icao: str = data["icao"]
+        r: str = data["r"]
+        t: str = data["t"]
+        db_flags: int = data["dbFlags"]
+        description: str = data["desc"]
+        own_op: str = data["ownOp"]
+        year_val: str | None = data["year"]
+        timestamp_val: float = data["timestamp"]
 
     return AircraftRecord(
         icao=icao,
@@ -112,7 +113,7 @@ def process_traces_from_json_bytes(trace_bytes: bytes) -> Generator[TraceEntry]:
     """Process traces from JSON bytes."""
     import io
 
-    data = json_stream.load(io.BytesIO(trace_bytes))
+    data = cast(TransientStreamingJSONObject, json_stream.load(io.BytesIO(trace_bytes)))
 
     timestamp_val = data.get("timestamp")
     if timestamp_val is None:
@@ -122,14 +123,14 @@ def process_traces_from_json_bytes(trace_bytes: bytes) -> Generator[TraceEntry]:
 
     # Stream through trace array, converting each trace to standard types immediately
     for trace in data.get("trace", []):
-        trace_list = json_stream.to_standard_types(trace)
+        trace_list = cast(list[Any], json_stream.to_standard_types(trace))
         yield _create_trace_entry(trace_list, timestamp_dt)
 
 
 def process_traces_from_file(trace_file: Path) -> Generator[TraceEntry]:
     """Process traces from a gzipped JSON file."""
     with open_file(trace_file) as f:
-        data = json_stream.load(f)
+        data = cast(TransientStreamingJSONObject, json_stream.load(f))
 
         timestamp_val = data.get("timestamp")
         if timestamp_val is None:
@@ -139,5 +140,5 @@ def process_traces_from_file(trace_file: Path) -> Generator[TraceEntry]:
 
         # Stream through trace array, converting each trace to standard types immediately
         for trace in data.get("trace", []):
-            trace_list = json_stream.to_standard_types(trace)
+            trace_list = cast(list[Any], json_stream.to_standard_types(trace))
             yield _create_trace_entry(trace_list, timestamp_dt)
