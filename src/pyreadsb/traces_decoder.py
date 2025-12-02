@@ -48,24 +48,40 @@ TRACE_FLAG_NEW_LEG: Final[int] = 2
 TRACE_FLAG_VERTICAL_RATE_GEOMETRIC: Final[int] = 4
 TRACE_FLAG_ALTITUDE_GEOMETRIC: Final[int] = 8
 
-TRACE_FLAGS = frozenset({
-    TRACE_FLAG_STALE,
-    TRACE_FLAG_NEW_LEG,
-    TRACE_FLAG_VERTICAL_RATE_GEOMETRIC,
-    TRACE_FLAG_ALTITUDE_GEOMETRIC,
-})
+TRACE_FLAGS = frozenset(
+    {
+        TRACE_FLAG_STALE,
+        TRACE_FLAG_NEW_LEG,
+        TRACE_FLAG_VERTICAL_RATE_GEOMETRIC,
+        TRACE_FLAG_ALTITUDE_GEOMETRIC,
+    }
+)
 
 
 def get_aircraft_record(trace_file: Path) -> AircraftRecord:
     """Extract aircraft record from a gzipped JSON file."""
     # Fields we need to extract
-    required_fields = {"icao", "r", "t", "dbFlags", "desc", "ownOp", "year", "timestamp"}
+    required_fields = {
+        "icao",
+        "r",
+        "t",
+        "dbFlags",
+        "desc",
+        "ownOp",
+        "year",
+        "timestamp",
+    }
 
     with open_file(trace_file) as f:
         data: dict[str, Any] = {}
         parser = ijson.parse(f)
         for prefix, event, value in parser:
-            if prefix in required_fields and event in ("string", "number", "boolean", "null"):
+            if prefix in required_fields and event in (
+                "string",
+                "number",
+                "boolean",
+                "null",
+            ):
                 data[prefix] = value
                 # Early exit once we have all required fields
                 if len(data) == len(required_fields):

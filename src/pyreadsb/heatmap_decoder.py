@@ -267,7 +267,9 @@ class HeatmapDecoder:
 
             if hex_val == magic:
                 # Timestamp separator
-                timestamp_float = (lon & 0xFFFFFFFF) / 1000.0 + (lat & 0xFFFFFFFF) * 4294967.296
+                timestamp_float = (lon & 0xFFFFFFFF) / 1000.0 + (
+                    lat & 0xFFFFFFFF
+                ) * 4294967.296
                 timestamp = datetime.fromtimestamp(timestamp_float, tz=UTC)
                 self.current_timestamp = timestamp
                 yield self.TimestampSeparator(
@@ -276,7 +278,9 @@ class HeatmapDecoder:
                 )
             elif lat & (1 << 30):  # Info/callsign entry
                 callsign_bytes = struct.pack("<IH", lon & 0xFFFFFFFF, alt & 0xFFFF)
-                callsign = callsign_bytes.rstrip(b"\x00").decode("ascii", errors="ignore")
+                callsign = callsign_bytes.rstrip(b"\x00").decode(
+                    "ascii", errors="ignore"
+                )
                 yield self.CallsignEntry(
                     hex_id=f"{hex_val & 0xFFFFFF:06x}",
                     callsign=callsign if callsign else None,
@@ -302,9 +306,7 @@ class HeatmapDecoder:
         # Check for trailing incomplete data
         remaining = data_len % entry_size
         if remaining:
-            self.logger.warning(
-                f"Incomplete entry at end: {remaining} bytes"
-            )
+            self.logger.warning(f"Incomplete entry at end: {remaining} bytes")
 
     def decode_from_file(
         self, file_path: Path
@@ -347,7 +349,9 @@ class HeatmapDecoder:
 
                     if hex_val == magic:
                         # Timestamp separator
-                        timestamp_float = (lon & 0xFFFFFFFF) / 1000.0 + (lat & 0xFFFFFFFF) * 4294967.296
+                        timestamp_float = (lon & 0xFFFFFFFF) / 1000.0 + (
+                            lat & 0xFFFFFFFF
+                        ) * 4294967.296
                         timestamp = datetime.fromtimestamp(timestamp_float, tz=UTC)
                         self.current_timestamp = timestamp
                         yield self.TimestampSeparator(
@@ -355,8 +359,12 @@ class HeatmapDecoder:
                             raw_data=chunk[pos : pos + entry_size],
                         )
                     elif lat & (1 << 30):  # Info/callsign entry
-                        callsign_bytes = struct.pack("<IH", lon & 0xFFFFFFFF, alt & 0xFFFF)
-                        callsign = callsign_bytes.rstrip(b"\x00").decode("ascii", errors="ignore")
+                        callsign_bytes = struct.pack(
+                            "<IH", lon & 0xFFFFFFFF, alt & 0xFFFF
+                        )
+                        callsign = callsign_bytes.rstrip(b"\x00").decode(
+                            "ascii", errors="ignore"
+                        )
                         yield self.CallsignEntry(
                             hex_id=f"{hex_val & 0xFFFFFF:06x}",
                             callsign=callsign if callsign else None,
