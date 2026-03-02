@@ -23,5 +23,5 @@ repos:
     hooks:
       - id: mypy
         args: [--ignore-missing-imports]
-        additional_dependencies: [polars, types-pytz]
+        additional_dependencies: [types-pytz]
         files: ^src/

@@ -13,9 +13,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dataframe = [
-    "polars[pyarrow,timezone]>=1.30.0",
-]
 dev = [
     "pytest>=8.4.0",
     "pytest-cov>=6.0.0",

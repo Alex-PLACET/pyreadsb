@@ -2,7 +2,6 @@
 
 from .compression_utils import detect_compression, open_file
 from .heatmap_decoder import HeatmapDecoder
-from .heatmap_to_dataframe import convert_to_dataframes, export_to_parquet
 from .traces_decoder import (
     TRACE_FLAG_ALTITUDE_GEOMETRIC,
     TRACE_FLAG_NEW_LEG,
