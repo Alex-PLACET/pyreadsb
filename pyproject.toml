@@ -8,7 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "json-stream>=2.4.1",
+    "jiter",
     "tzdata>=2025.2",
 ]
 
@@ -62,7 +62,7 @@ profile = "black"
 line_length = 88
 
 [tool.mypy]
-python_version = "1.1.0"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
